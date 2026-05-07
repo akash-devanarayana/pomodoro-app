@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pomodoro</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --work:    #e85d5d;
+      --short:   #4caf80;
+      --long:    #5b8dee;
+      --bg:      #1a1a2e;
+      --surface: #16213e;
+      --text:    #eaeaea;
+      --muted:   #7a7a9a;
+      --radius:  12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    /* Mode tabs */
+    .modes {
+      display: flex;
+      gap: 0.5rem;
+      background: var(--surface);
+      padding: 0.35rem;
+      border-radius: var(--radius);
+    }
+
+    .modes button {
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 0.45rem 1.1rem;
+      border-radius: calc(var(--radius) - 4px);
+      font-size: 0.82rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .modes button.active {
+      background: var(--accent, var(--work));
+      color: #fff;
+    }
+
+    /* Timer ring */
+    .ring-wrap {
+      position: relative;
+      width: 220px;
+      height: 220px;
+    }
+
+    svg.ring {
+      transform: rotate(-90deg);
+      width: 100%;
+      height: 100%;
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: var(--surface);
+      stroke-width: 10;
+    }
+
+    .ring-progress {
+      fill: none;
+      stroke: var(--accent, var(--work));
+      stroke-width: 10;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1s linear, stroke 0.4s;
+    }
+
+    .timer-display {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+    }
+
+    #time {
+      font-size: 3.2rem;
+      font-variant-numeric: tabular-nums;
+      font-weight: 300;
+      letter-spacing: 0.02em;
+    }
+
+    #session-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .btn-main {
+      background: var(--accent, var(--work));
+      color: #fff;
+      border: none;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      font-size: 1.4rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s, opacity 0.15s;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .btn-main:hover { opacity: 0.88; transform: scale(1.06); }
+    .btn-main:active { transform: scale(0.96); }
+
+    .btn-icon {
+      background: var(--surface);
+      color: var(--muted);
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s, transform 0.15s;
+    }
+
+    .btn-icon:hover { color: var(--text); transform: scale(1.08); }
+    .btn-icon:active { transform: scale(0.94); }
+
+    /* Pomodoro dots */
+    .dots {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--muted);
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    .dot.filled {
+      background: var(--accent, var(--work));
+      border-color: var(--accent, var(--work));
+    }
+
+    /* Keyboard hint */
+    .hint {
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .hint kbd {
+      background: var(--surface);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Pomodoro</h1>
+
+  <div class="modes">
+    <button class="active" data-mode="work">Focus</button>
+    <button data-mode="short">Short Break</button>
+    <button data-mode="long">Long Break</button>
+  </div>
+
+  <div class="ring-wrap">
+    <svg class="ring" viewBox="0 0 220 220">
+      <circle class="ring-bg" cx="110" cy="110" r="100" />
+      <circle class="ring-progress" id="ring" cx="110" cy="110" r="100"
+        stroke-dasharray="628.3" stroke-dashoffset="0" />
+    </svg>
+    <div class="timer-display">
+      <span id="time">25:00</span>
+      <span id="session-label">Focus</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-icon" id="btn-prev" title="Previous / Restart (R)">&#8592;</button>
+    <button class="btn-main" id="btn-play" title="Play/Pause (Space)">&#9654;</button>
+    <button class="btn-icon" id="btn-skip" title="Skip to next (S)">&#8594;</button>
+  </div>
+
+  <div class="dots" id="dots"></div>
+
+  <p class="hint"><kbd>Space</kbd> play/pause &nbsp; <kbd>R</kbd> restart &nbsp; <kbd>S</kbd> skip</p>
+
+  <script>
+    const MODES = {
+      work:  { label: 'Focus',       minutes: 25, color: 'var(--work)'  },
+      short: { label: 'Short Break', minutes: 5,  color: 'var(--short)' },
+      long:  { label: 'Long Break',  minutes: 15, color: 'var(--long)'  },
+    };
+    const TOTAL_POMODOROS = 4;
+    const CIRCUMFERENCE = 628.3; // 2π × 100
+
+    let currentMode = 'work';
+    let totalSeconds = MODES.work.minutes * 60;
+    let remaining = totalSeconds;
+    let running = false;
+    let interval = null;
+    let completedPomodoros = 0;
+
+    const timeEl    = document.getElementById('time');
+    const labelEl   = document.getElementById('session-label');
+    const ringEl    = document.getElementById('ring');
+    const btnPlay   = document.getElementById('btn-play');
+    const btnPrev   = document.getElementById('btn-prev');
+    const btnSkip   = document.getElementById('btn-skip');
+    const dotsEl    = document.getElementById('dots');
+    const modeBtns  = document.querySelectorAll('.modes button');
+
+    function buildDots() {
+      dotsEl.innerHTML = '';
+      for (let i = 0; i < TOTAL_POMODOROS; i++) {
+        const d = document.createElement('div');
+        d.className = 'dot' + (i < completedPomodoros ? ' filled' : '');
+        dotsEl.appendChild(d);
+      }
+    }
+
+    function setAccent(color) {
+      document.documentElement.style.setProperty('--accent', color);
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      const m = MODES[mode];
+      totalSeconds = m.minutes * 60;
+      remaining = totalSeconds;
+      running = false;
+      clearInterval(interval);
+
+      setAccent(m.color);
+      labelEl.textContent = m.label;
+      modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+      btnPlay.innerHTML = '&#9654;';
+      render();
+    }
+
+    function fmt(s) {
+      const m = String(Math.floor(s / 60)).padStart(2, '0');
+      const sec = String(s % 60).padStart(2, '0');
+      return `${m}:${sec}`;
+    }
+
+    function render() {
+      timeEl.textContent = fmt(remaining);
+      const ratio = remaining / totalSeconds;
+      ringEl.style.strokeDashoffset = CIRCUMFERENCE * (1 - ratio);
+      document.title = `${fmt(remaining)} — ${MODES[currentMode].label}`;
+    }
+
+    function tick() {
+      if (remaining <= 0) {
+        clearInterval(interval);
+        running = false;
+        btnPlay.innerHTML = '&#9654;';
+        if (currentMode === 'work') {
+          completedPomodoros = (completedPomodoros + 1) % (TOTAL_POMODOROS + 1);
+          buildDots();
+          notify('Focus session complete!', 'Time for a break.');
+          const next = completedPomodoros === 0 ? 'long' : 'short';
+          setMode(next);
+        } else {
+          notify('Break over!', 'Ready to focus?');
+          setMode('work');
+        }
+        return;
+      }
+      remaining--;
+      render();
+    }
+
+    function togglePlay() {
+      if (running) {
+        clearInterval(interval);
+        running = false;
+        btnPlay.innerHTML = '&#9654;';
+      } else {
+        running = true;
+        btnPlay.innerHTML = '&#9646;&#9646;';
+        interval = setInterval(tick, 1000);
+      }
+    }
+
+    function restart() {
+      clearInterval(interval);
+      running = false;
+      btnPlay.innerHTML = '&#9654;';
+      remaining = totalSeconds;
+      render();
+    }
+
+    function skip() {
+      clearInterval(interval);
+      running = false;
+      btnPlay.innerHTML = '&#9654;';
+      if (currentMode === 'work') {
+        completedPomodoros = Math.min(completedPomodoros + 1, TOTAL_POMODOROS);
+        buildDots();
+        const next = completedPomodoros >= TOTAL_POMODOROS ? 'long' : 'short';
+        if (completedPomodoros >= TOTAL_POMODOROS) completedPomodoros = 0;
+        buildDots();
+        setMode(next);
+      } else {
+        setMode('work');
+      }
+    }
+
+    function notify(title, body) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '' });
+      }
+    }
+
+    // Request notification permission silently
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    btnPlay.addEventListener('click', togglePlay);
+    btnPrev.addEventListener('click', restart);
+    btnSkip.addEventListener('click', skip);
+
+    modeBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+      if (e.key === 'r' || e.key === 'R') restart();
+      if (e.key === 's' || e.key === 'S') skip();
+    });
+
+    buildDots();
+    setMode('work');
+  </script>
+</body>
+</html>
