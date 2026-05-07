@@ -11,6 +11,7 @@
       --work:    #e85d5d;
       --short:   #4caf80;
       --long:    #5b8dee;
+      --custom:  #a855f7;
       --bg:      #1a1a2e;
       --surface: #16213e;
       --text:    #eaeaea;
@@ -39,7 +40,6 @@
       font-weight: 400;
     }
 
-    /* Mode tabs */
     .modes {
       display: flex;
       gap: 0.5rem;
@@ -64,6 +64,60 @@
       background: var(--accent, var(--work));
       color: #fff;
     }
+
+    /* Custom timer input row */
+    .custom-row {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface);
+      padding: 0.5rem 0.9rem;
+      border-radius: var(--radius);
+    }
+
+    .custom-row.visible { display: flex; }
+
+    .custom-row label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .custom-row input[type="number"] {
+      width: 52px;
+      background: var(--bg);
+      border: 1px solid var(--muted);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 1rem;
+      font-variant-numeric: tabular-nums;
+      padding: 0.25rem 0.4rem;
+      text-align: center;
+      outline: none;
+      -moz-appearance: textfield;
+    }
+
+    .custom-row input[type="number"]::-webkit-inner-spin-button,
+    .custom-row input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+    .custom-row input[type="number"]:focus {
+      border-color: var(--accent, var(--custom));
+    }
+
+    .custom-row span { color: var(--muted); font-size: 1.1rem; }
+
+    .btn-set {
+      background: var(--accent, var(--custom));
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.3rem 0.8rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .btn-set:hover { opacity: 0.85; }
 
     /* Timer ring */
     .ring-wrap {
@@ -116,7 +170,6 @@
       text-transform: uppercase;
     }
 
-    /* Controls */
     .controls {
       display: flex;
       gap: 1rem;
@@ -160,7 +213,6 @@
     .btn-icon:hover { color: var(--text); transform: scale(1.08); }
     .btn-icon:active { transform: scale(0.94); }
 
-    /* Pomodoro dots */
     .dots {
       display: flex;
       gap: 0.5rem;
@@ -180,7 +232,6 @@
       border-color: var(--accent, var(--work));
     }
 
-    /* Keyboard hint */
     .hint {
       font-size: 0.72rem;
       color: var(--muted);
@@ -203,6 +254,15 @@
     <button class="active" data-mode="work">Focus</button>
     <button data-mode="short">Short Break</button>
     <button data-mode="long">Long Break</button>
+    <button data-mode="custom">Custom</button>
+  </div>
+
+  <div class="custom-row" id="custom-row">
+    <label>Duration</label>
+    <input type="number" id="custom-min" min="0" max="99" value="10" placeholder="mm" />
+    <span>:</span>
+    <input type="number" id="custom-sec" min="0" max="59" value="0" placeholder="ss" />
+    <button class="btn-set" id="btn-set">Set</button>
   </div>
 
   <div class="ring-wrap">
@@ -218,9 +278,9 @@
   </div>
 
   <div class="controls">
-    <button class="btn-icon" id="btn-prev" title="Previous / Restart (R)">&#8592;</button>
+    <button class="btn-icon" id="btn-restart" title="Restart (R)">&#8635;</button>
     <button class="btn-main" id="btn-play" title="Play/Pause (Space)">&#9654;</button>
-    <button class="btn-icon" id="btn-skip" title="Skip to next (S)">&#8594;</button>
+    <button class="btn-icon" id="btn-skip" title="Skip (S)">&#8594;</button>
   </div>
 
   <div class="dots" id="dots"></div>
@@ -229,28 +289,33 @@
 
   <script>
     const MODES = {
-      work:  { label: 'Focus',       minutes: 25, color: 'var(--work)'  },
-      short: { label: 'Short Break', minutes: 5,  color: 'var(--short)' },
-      long:  { label: 'Long Break',  minutes: 15, color: 'var(--long)'  },
+      work:   { label: 'Focus',       seconds: 25 * 60, color: 'var(--work)'   },
+      short:  { label: 'Short Break', seconds: 5  * 60, color: 'var(--short)'  },
+      long:   { label: 'Long Break',  seconds: 15 * 60, color: 'var(--long)'   },
+      custom: { label: 'Custom',      seconds: 10 * 60, color: 'var(--custom)' },
     };
     const TOTAL_POMODOROS = 4;
-    const CIRCUMFERENCE = 628.3; // 2π × 100
+    const CIRCUMFERENCE = 628.3;
 
     let currentMode = 'work';
-    let totalSeconds = MODES.work.minutes * 60;
+    let totalSeconds = MODES.work.seconds;
     let remaining = totalSeconds;
     let running = false;
     let interval = null;
     let completedPomodoros = 0;
 
-    const timeEl    = document.getElementById('time');
-    const labelEl   = document.getElementById('session-label');
-    const ringEl    = document.getElementById('ring');
-    const btnPlay   = document.getElementById('btn-play');
-    const btnPrev   = document.getElementById('btn-prev');
-    const btnSkip   = document.getElementById('btn-skip');
-    const dotsEl    = document.getElementById('dots');
-    const modeBtns  = document.querySelectorAll('.modes button');
+    const timeEl      = document.getElementById('time');
+    const labelEl     = document.getElementById('session-label');
+    const ringEl      = document.getElementById('ring');
+    const btnPlay     = document.getElementById('btn-play');
+    const btnRestart  = document.getElementById('btn-restart');
+    const btnSkip     = document.getElementById('btn-skip');
+    const dotsEl      = document.getElementById('dots');
+    const modeBtns    = document.querySelectorAll('.modes button');
+    const customRow   = document.getElementById('custom-row');
+    const customMin   = document.getElementById('custom-min');
+    const customSec   = document.getElementById('custom-sec');
+    const btnSet      = document.getElementById('btn-set');
 
     function buildDots() {
       dotsEl.innerHTML = '';
@@ -265,10 +330,10 @@
       document.documentElement.style.setProperty('--accent', color);
     }
 
-    function setMode(mode) {
+    function setMode(mode, keepDots) {
       currentMode = mode;
       const m = MODES[mode];
-      totalSeconds = m.minutes * 60;
+      totalSeconds = m.seconds;
       remaining = totalSeconds;
       running = false;
       clearInterval(interval);
@@ -276,7 +341,9 @@
       setAccent(m.color);
       labelEl.textContent = m.label;
       modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+      customRow.classList.toggle('visible', mode === 'custom');
       btnPlay.innerHTML = '&#9654;';
+      if (!keepDots) buildDots();
       render();
     }
 
@@ -299,11 +366,17 @@
         running = false;
         btnPlay.innerHTML = '&#9654;';
         if (currentMode === 'work') {
-          completedPomodoros = (completedPomodoros + 1) % (TOTAL_POMODOROS + 1);
+          completedPomodoros++;
           buildDots();
           notify('Focus session complete!', 'Time for a break.');
-          const next = completedPomodoros === 0 ? 'long' : 'short';
-          setMode(next);
+          if (completedPomodoros >= TOTAL_POMODOROS) {
+            completedPomodoros = 0;
+            setMode('long');
+          } else {
+            setMode('short');
+          }
+        } else if (currentMode === 'custom') {
+          notify('Timer done!', '');
         } else {
           notify('Break over!', 'Ready to focus?');
           setMode('work');
@@ -339,36 +412,60 @@
       running = false;
       btnPlay.innerHTML = '&#9654;';
       if (currentMode === 'work') {
-        completedPomodoros = Math.min(completedPomodoros + 1, TOTAL_POMODOROS);
-        buildDots();
-        const next = completedPomodoros >= TOTAL_POMODOROS ? 'long' : 'short';
-        if (completedPomodoros >= TOTAL_POMODOROS) completedPomodoros = 0;
-        buildDots();
-        setMode(next);
+        completedPomodoros++;
+        if (completedPomodoros >= TOTAL_POMODOROS) {
+          completedPomodoros = 0;
+          buildDots();
+          setMode('long');
+        } else {
+          buildDots();
+          setMode('short');
+        }
+      } else if (currentMode === 'custom') {
+        // do nothing — no auto-advance for custom
       } else {
         setMode('work');
       }
     }
 
+    function applyCustomTime() {
+      const m = Math.max(0, Math.min(99, parseInt(customMin.value) || 0));
+      const s = Math.max(0, Math.min(59, parseInt(customSec.value) || 0));
+      const total = m * 60 + s;
+      if (total === 0) return;
+      MODES.custom.seconds = total;
+      customMin.value = m;
+      customSec.value = String(s).padStart(2, '0');
+      clearInterval(interval);
+      running = false;
+      btnPlay.innerHTML = '&#9654;';
+      totalSeconds = total;
+      remaining = total;
+      render();
+    }
+
     function notify(title, body) {
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body, icon: '' });
+        new Notification(title, { body });
       }
     }
 
-    // Request notification permission silently
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
 
     btnPlay.addEventListener('click', togglePlay);
-    btnPrev.addEventListener('click', restart);
+    btnRestart.addEventListener('click', restart);
     btnSkip.addEventListener('click', skip);
+    btnSet.addEventListener('click', applyCustomTime);
+
+    customMin.addEventListener('keydown', e => { if (e.key === 'Enter') applyCustomTime(); });
+    customSec.addEventListener('keydown', e => { if (e.key === 'Enter') applyCustomTime(); });
 
     modeBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
     document.addEventListener('keydown', e => {
-      if (e.target.tagName === 'BUTTON') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
       if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
       if (e.key === 'r' || e.key === 'R') restart();
       if (e.key === 's' || e.key === 'S') skip();
